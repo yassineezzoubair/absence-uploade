@@ -5,46 +5,52 @@ on:
     branches:
       - main
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y zip unzip openjdk-17-jdk python3-pip git \
-                              pkg-config libgl1-mesa-dev libffi-dev \
-                              libssl-dev libsqlite3-dev
-          pip install --upgrade pip
-          pip install Cython buildozer
+          sudo apt install -y wget unzip openjdk-17-jdk python3-pip git pkg-config libgl1-mesa-dev
+          pip install buildozer
 
-      - name: Setup Android SDK Tools
-        uses: android-actions/setup-android@v3.2.1
-        with:
-          cmdline-tools-version: 11076708
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: true
-          packages: |
-            platform-tools
-            platforms;android-31
-            build-tools;31.0.0
+      - name: Setup Android SDK folders
+        run: |
+          mkdir -p $HOME/android-sdk/platform-tools
+          mkdir -p $HOME/android-sdk/build-tools/31.0.0
+          mkdir -p $HOME/android-sdk/platforms/android-31
+
+      - name: Install Android Platform Tools
+        run: |
+          wget https://dl.google.com/android/repository/platform-tools-latest-linux.zip -O platform-tools.zip
+          unzip -o platform-tools.zip -d $HOME/android-sdk/
+          rm platform-tools.zip
+
+      - name: Install Android Build Tools 31.0.0
+        run: |
+          wget https://dl.google.com/android/repository/build-tools_r31.0.0-linux.zip -O build-tools.zip
+          unzip -o build-tools.zip -d $HOME/android-sdk/build-tools/31.0.0
+          rm build-tools.zip
+
+      - name: Install Android Platforms Android-31
+        run: |
+          wget https://dl.google.com/android/repository/platforms;android-31_r01.zip -O android-platforms.zip
+          unzip -o android-platforms.zip -d $HOME/android-sdk/platforms/android-31
+          rm android-platforms.zip
+
+      - name: Add SDK to PATH
+        run: echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
       - name: Build APK
         run: |
+          buildozer init || true
           buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: absence-uploader
+          name: the_phone_app_apk
           path: bin/*.apk
