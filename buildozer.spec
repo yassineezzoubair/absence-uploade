@@ -29,7 +29,7 @@ android.enable_androidx_workaround = True
 
 # دعم الإصدارات الجديدة
 android.gradle_dependencies = com.google.android.gms:play-services-auth:20.1.0
-android.add_asset = service_account.json
+
 
 # لإضافة صلاحيات رفع الملفات والوصول للإنترنت
 android.allow_backup = True
