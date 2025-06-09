@@ -29,13 +29,14 @@ jobs:
       - name: Setup Android SDK Tools
         uses: android-actions/setup-android@v3.2.1
         with:
-             cmdline-tools-version: 11076708 # Latest stable as of mid-2025
-             accept-android-sdk-licenses: true
-             log-accepted-android-sdk-licenses: true
-             packages: |
-                    platform-tools
-                    platforms;android-31
-                    build-tools;31.0.0
+         cmdline-tools-version: 11076708  # Use latest stable tools version
+         accept-android-sdk-licenses: true
+         log-accepted-android-sdk-licenses: true
+        packages: |
+         platform-tools
+         platforms;android-31
+         build-tools;31.0.0
+
 
 
       - name: Build APK
