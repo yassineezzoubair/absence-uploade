@@ -19,29 +19,28 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y zip unzip openjdk-17-jdk python3-pip git pkg-config libgl1-mesa-dev
+          sudo apt install -y zip unzip openjdk-17-jdk python3-pip git \
+                              pkg-config libgl1-mesa-dev libffi-dev \
+                              libssl-dev libsqlite3-dev
           pip install --upgrade pip
-          pip install buildozer cython
+          pip install Cython buildozer
 
       - name: Setup Android SDK Tools
         uses: android-actions/setup-android@v3.2.1
         with:
-         cmdline-tools-version: 11076708  # Use latest stable tools version
-         accept-android-sdk-licenses: true
-         log-accepted-android-sdk-licenses: true
-        packages: |
-         platform-tools
-         platforms;android-31
-         build-tools;31.0.0
-
-
+          cmdline-tools-version: 11076708
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-31
+            build-tools;31.0.0
 
       - name: Build APK
         run: |
-          buildozer init || true
           buildozer android debug
 
       - name: Upload APK
