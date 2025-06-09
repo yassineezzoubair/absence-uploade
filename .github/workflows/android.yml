@@ -1,3 +1,11 @@
+name: Build Kivy APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,8 +34,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: absence-uploader
-          path: bin/android/debug/  # Adjust path if needed
-
-
-
-
+          path: bin/*.apk
