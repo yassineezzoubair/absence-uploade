@@ -2,16 +2,16 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout repository
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
@@ -19,19 +19,18 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🔧 Install dependencies
+      - name: 📁 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer cython virtualenv
+          pip install buildozer
 
-      - name: 📦 Download Android NDK r25b
+      - name: 📥 Download NDK r25b
         run: |
           wget https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip android-ndk-r25b-linux.zip
-          mv android-ndk-r25b $GITHUB_WORKSPACE/ndk
-          echo "ANDROIDNDK=$GITHUB_WORKSPACE/ndk" >> $GITHUB_ENV
+          echo "ANDROIDNDK=$GITHUB_WORKSPACE/android-ndk-r25b" >> $GITHUB_ENV
 
-      - name: 🚧 Build Android APK with Buildozer
+      - name: ⚙️ Build APK using Buildozer
         uses: ArtemSBulgakov/buildozer-action@v1
         with:
           command: buildozer android debug
@@ -41,8 +40,8 @@ jobs:
           ANDROIDMINAPI: '21'
           APP_ANDROID_ACCEPT_SDK_LICENSE: '1'
 
-      - name: 📤 Upload APK as Artifact
+      - name: 🧳 Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kivy-app-debug-apk
-          path: ./bin/*.apk
+          name: apk
+          path: bin/*.apk
