@@ -23,6 +23,10 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y wget unzip
+
+          # Clean old SDK files to avoid conflicts
+          rm -rf $HOME/android-sdk/cmdline-tools
+
           mkdir -p $HOME/android-sdk
           cd $HOME/android-sdk
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
