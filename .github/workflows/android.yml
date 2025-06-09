@@ -22,37 +22,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y zip unzip openjdk-17-jdk python3-pip git pkg-config libgl1-mesa-dev wget
+          sudo apt install -y zip unzip openjdk-17-jdk python3-pip git pkg-config libgl1-mesa-dev
           pip install --upgrade pip
-          pip install cython buildozer
+          pip install buildozer cython
 
-      - name: Install Android SDK and tools
-        run: |
-          ANDROID_SDK_ROOT=$HOME/android-sdk
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
-
-          # Download SDK tools
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip
-
-          # Fix folder structure safely
-          if [ -d "cmdline-tools/cmdline-tools" ]; then
-            mkdir -p cmdline-tools/latest
-            mv cmdline-tools/cmdline-tools/* cmdline-tools/latest/
-            rm -rf cmdline-tools/cmdline-tools
-          elif [ ! -d "cmdline-tools/latest" ]; then
-            mkdir -p cmdline-tools/latest
-            mv cmdline-tools/* cmdline-tools/latest/
-          else
-            echo "cmdline-tools/latest already exists, skipping move"
-          fi
-
-          export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
-
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-31" "build-tools;31.0.0" "ndk;23.1.7779620"
+      - name: Setup Android SDK Tools
+        uses: android-actions/setup-android@v3.2.1
+        with:
+          cmdline-tools-version: 10406996
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-31
+            build-tools;31.0.0
 
       - name: Build APK
         run: |
