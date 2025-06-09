@@ -10,7 +10,7 @@ orientation = portrait
 fullscreen = 1
 android.permissions = CAMERA,INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 android.hardware = camera
-
+entrypoint = the_phone_app.py
 [buildozer]
 log_level = 2
 warn_on_root = 1
