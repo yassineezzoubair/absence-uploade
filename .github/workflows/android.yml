@@ -2,54 +2,61 @@ name: Build Kivy APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
 
-      - name: Install dependencies
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y wget unzip openjdk-17-jdk python3-pip git pkg-config libgl1-mesa-dev
-          pip install buildozer
+          sudo apt install -y wget unzip openjdk-17-jdk python3-pip git \
+                              pkg-config libgl1-mesa-dev libffi-dev libssl-dev
+          pip install --upgrade pip
+          pip install Cython buildozer
 
       - name: Setup Android SDK folders
         run: |
-          mkdir -p $HOME/android-sdk/platform-tools
-          mkdir -p $HOME/android-sdk/build-tools/31.0.0
-          mkdir -p $HOME/android-sdk/platforms/android-31
+          SDK="$HOME/android-sdk"
+          mkdir -p "$SDK/platform-tools" \
+                   "$SDK/build-tools/30.0.3" \
+                   "$SDK/platforms/android-31"
 
-      - name: Install Android Platform Tools
+      - name: Install platform-tools
         run: |
-          wget https://dl.google.com/android/repository/platform-tools-latest-linux.zip -O platform-tools.zip
-          unzip -o platform-tools.zip -d $HOME/android-sdk/
-          rm platform-tools.zip
+          wget -q https://dl.google.com/android/repository/platform-tools-latest-linux.zip -O pt.zip
+          unzip -q -o pt.zip -d "$HOME/android-sdk"
+          rm pt.zip
 
-      - name: Install Android Build Tools 31.0.0
+      - name: Install build-tools 30.0.3
         run: |
-          wget https://dl.google.com/android/repository/build-tools_r31.0.0-linux.zip -O build-tools.zip
-          unzip -o build-tools.zip -d $HOME/android-sdk/build-tools/31.0.0
-          rm build-tools.zip
+          wget -q https://dl.google.com/android/repository/build-tools_r30.0.3-linux.zip -O bt.zip
+          unzip -q -o bt.zip -d "$HOME/android-sdk/build-tools/30.0.3"
+          rm bt.zip
 
-      - name: Install Android Platforms Android-31
+      - name: Install android-31 platform SDK
         run: |
-          wget https://dl.google.com/android/repository/platforms;android-31_r01.zip -O android-platforms.zip
-          unzip -o android-platforms.zip -d $HOME/android-sdk/platforms/android-31
-          rm android-platforms.zip
+          wget -q https://dl.google.com/android/repository/platforms;android-31_r02.zip -O pf.zip
+          unzip -q -o pf.zip -d "$HOME/android-sdk/platforms/android-31"
+          rm pf.zip
 
       - name: Add SDK to PATH
         run: echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
       - name: Build APK
+        env:
+          ANDROID_SDK_ROOT: ${{ runner.home }}/android-sdk
+          PATH: ${{ runner.home }}/android-sdk/platform-tools:${{ runner.env.PATH }}
         run: |
-          buildozer init || true
           buildozer android debug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: the_phone_app_apk
