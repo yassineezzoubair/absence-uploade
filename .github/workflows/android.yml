@@ -8,55 +8,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Setup Python & dependencies
         run: |
           sudo apt update
-          sudo apt install -y wget unzip openjdk-17-jdk python3-pip git \
-                              pkg-config libgl1-mesa-dev libffi-dev libssl-dev
+          sudo apt install -y zip unzip openjdk-17-jdk python3-pip git pkg-config libgl1-mesa-dev
           pip install --upgrade pip
           pip install Cython buildozer
 
-      - name: Setup Android SDK folders
-        run: |
-          SDK="$HOME/android-sdk"
-          mkdir -p "$SDK/platform-tools" \
-                   "$SDK/build-tools/30.0.3" \
-                   "$SDK/platforms/android-31"
-
-      - name: Install platform-tools
-        run: |
-          wget -q https://dl.google.com/android/repository/platform-tools-latest-linux.zip -O pt.zip
-          unzip -q -o pt.zip -d "$HOME/android-sdk"
-          rm pt.zip
-
-      - name: Install build-tools 30.0.3
-        run: |
-          wget -q https://dl.google.com/android/repository/build-tools_r30.0.3-linux.zip -O bt.zip
-          unzip -q -o bt.zip -d "$HOME/android-sdk/build-tools/30.0.3"
-          rm bt.zip
-
-      - name: Install android-31 platform SDK
-        run: |
-          wget -q https://dl.google.com/android/repository/platforms;android-31_r02.zip -O pf.zip
-          unzip -q -o pf.zip -d "$HOME/android-sdk/platforms/android-31"
-          rm pf.zip
-
-      - name: Add SDK to PATH
-        run: echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+      - name: Setup Android SDK Tools
+        uses: android-actions/setup-android@v3.2.1
+        with:
+          cmdline-tools-version: 11076708
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-31
+            build-tools;30.0.3
 
       - name: Build APK
-        env:
-          ANDROID_SDK_ROOT: ${{ runner.home }}/android-sdk
-          PATH: ${{ runner.home }}/android-sdk/platform-tools:${{ runner.env.PATH }}
-        run: |
-          buildozer android debug
+        run: buildozer android debug
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: the_phone_app_apk
