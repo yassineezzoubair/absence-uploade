@@ -1,145 +1,80 @@
-name: Build Kivy APK
-on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.gitignore'
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
+[app]
+# Basic app info
+title = PhotoUploader
+package.name = photouploader
+package.domain = org.example
+source.dir = .
+source.include_exts = py,png,jpg,jpeg,kv,atlas,json,txt
+version = 1.0
 
-env:
-  ANDROID_API_LEVEL: 31
-  ANDROID_BUILD_TOOLS: 30.0.3
-  ANDROID_NDK_VERSION: 23.1.7779620
+# Python requirements - updated versions and organization
+requirements = 
+    python3,
+    kivy==2.3.0,  # Updated to latest stable
+    plyer==2.1.0,
+    google-api-python-client==2.117.0,
+    google-auth==2.27.0,
+    google-auth-oauthlib==1.2.0,
+    google-auth-httplib2==0.1.1,
+    certifi,
+    pillow==10.2.0,
+    requests==2.31.0
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          # Remove pip cache since we don't have requirements.txt
-          
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            zip unzip openjdk-17-jdk \
-            python3-pip git pkg-config \
-            libgl1-mesa-dev libgles2-mesa-dev \
-            libffi-dev libssl-dev \
-            build-essential libltdl-dev \
-            ant gradle \
-            autoconf automake libtool \
-            zlib1g-dev libncurses5-dev \
-            libncursesw5-dev libtinfo5
-            
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip wheel setuptools
-          pip install Cython==0.29.33 buildozer
-          
-      - name: Setup Android SDK
-        run: |
-          # Install Android SDK components manually
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
-          unzip -q commandlinetools-linux-8512546_latest.zip
-          mkdir -p $HOME/android-sdk/cmdline-tools/latest
-          mv cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-          
-          # Accept licenses
-          yes | sdkmanager --licenses
-          
-          # Install required packages
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-31"
-          sdkmanager "build-tools;30.0.3"
-          sdkmanager "ndk;23.1.7779620"
-          
-          # Set environment variables for subsequent steps
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-            
-      - name: Cache Buildozer dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-${{ runner.os }}-
-            
-      - name: Validate buildozer.spec
-        run: |
-          if [ ! -f buildozer.spec ]; then
-            echo "Error: buildozer.spec not found!"
-            exit 1
-          fi
-          
-      - name: Build APK
-        run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
-          echo "Building $BUILD_TYPE APK..."
-          
-          if [ "$BUILD_TYPE" = "release" ]; then
-            buildozer android release
-          else
-            buildozer android debug
-          fi
-          
-      - name: Verify APK creation
-        run: |
-          if [ ! -d "bin" ] || [ -z "$(ls -A bin/*.apk 2>/dev/null)" ]; then
-            echo "Error: No APK files found in bin/ directory"
-            exit 1
-          fi
-          
-          echo "APK files created:"
-          ls -la bin/*.apk
-          
-      - name: Get APK info
-        run: |
-          for apk in bin/*.apk; do
-            echo "APK: $apk"
-            echo "Size: $(du -h "$apk" | cut -f1)"
-            echo "---"
-          done
-          
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kivy-apk-${{ github.event.inputs.build_type || 'debug' }}-${{ github.sha }}
-          path: bin/*.apk
-          retention-days: 30
-          
-      - name: Upload build logs
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: build-logs-${{ github.sha }}
-          path: |
-            .buildozer/android/platform/build-*/logs/
-            .buildozer/android/platform/python-for-android/
-          retention-days: 7
+# App configuration
+orientation = portrait
+
+# Permissions - updated for Android 12+ compatibility
+android.permissions = 
+    CAMERA,
+    INTERNET,
+    ACCESS_NETWORK_STATE,
+    ACCESS_WIFI_STATE,
+    WAKE_LOCK,
+    VIBRATE
+
+# Add service account credentials - use secrets instead
+# android.add_src = service_account.json  # REMOVED - use GitHub Secrets
+
+# Android API configuration - match GitHub Actions
+android.api = 34
+android.minapi = 21
+android.ndk = 25.2.9519653  # Match workflow version
+android.arch = arm64-v8a  # Focus on 64-bit for better performance
+android.sdk = 34
+
+# Modern Android support
+android.useandroidx = True
+android.enable_androidx_workaround = True
+
+# Gradle dependencies - updated versions
+android.gradle_dependencies = 
+    com.google.android.gms:play-services-auth:21.0.0,
+    androidx.core:core-ktx:1.12.0,
+    androidx.appcompat:appcompat:1.6.1
+
+# Additional Android configuration
+android.allow_backup = True
+android.logcat_filters = *:S python:D
+
+# Build optimization - changed to apk for GitHub Actions
+android.release_artifact = apk
+android.debug.sign = 1
+
+# Application metadata
+android.meta_data = 
+    com.google.android.gms.version=@integer/google_play_services_version
+
+# Build optimization
+android.gradle.option = 
+    android.useAndroidX=true,
+    android.enableJetifier=true
+
+# New security config for Android 12+
+android.application_args = --use-sdk-versions 34
+android.manifest_application_arguments = android:appComponentFactory
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
+build_dir = ./.buildozer
+bin_dir = ./bin
