@@ -1,26 +1,128 @@
-name: Build & Publish Release APK
-
+name: Build Kivy APK
 on:
   push:
-    tags:
-      - '*'
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+env:
+  ANDROID_API_LEVEL: 31
+  ANDROID_BUILD_TOOLS: 30.0.3
 
 jobs:
-  Gradle:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
     steps:
-    - name: checkout code
-      uses: actions/checkout@v2
-    - name: setup jdk
-      uses: actions/setup-java@v1
-      with:
-        java-version: 11
-    - name: Make Gradle executable
-      run: chmod +x ./gradlew
-    - name: Build Release APK
-      run: ./gradlew assembleRelease
-    - name: Releasing using Hub
-      uses: sangatdesai/release-apk@main
-      env:
-       GITHUB_TOKEN: ${{ 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 }}
-       APP_FOLDER: app
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            zip unzip openjdk-17-jdk \
+            python3-pip git pkg-config \
+            libgl1-mesa-dev libgles2-mesa-dev \
+            libffi-dev libssl-dev \
+            build-essential libltdl-dev
+            
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip wheel setuptools
+          pip install Cython==0.29.33 buildozer
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3.2.1
+        with:
+          cmdline-tools-version: 11076708
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-${{ env.ANDROID_API_LEVEL }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            ndk;25.1.8937393
+            
+      - name: Cache Buildozer dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+            
+      - name: Validate buildozer.spec
+        run: |
+          if [ ! -f buildozer.spec ]; then
+            echo "Error: buildozer.spec not found!"
+            exit 1
+          fi
+          
+      - name: Build APK
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          echo "Building $BUILD_TYPE APK..."
+          
+          if [ "$BUILD_TYPE" = "release" ]; then
+            buildozer android release
+          else
+            buildozer android debug
+          fi
+          
+      - name: Verify APK creation
+        run: |
+          if [ ! -d "bin" ] || [ -z "$(ls -A bin/*.apk 2>/dev/null)" ]; then
+            echo "Error: No APK files found in bin/ directory"
+            exit 1
+          fi
+          
+          echo "APK files created:"
+          ls -la bin/*.apk
+          
+      - name: Get APK info
+        run: |
+          for apk in bin/*.apk; do
+            echo "APK: $apk"
+            echo "Size: $(du -h "$apk" | cut -f1)"
+            echo "---"
+          done
+          
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kivy-apk-${{ github.event.inputs.build_type || 'debug' }}-${{ github.sha }}
+          path: bin/*.apk
+          retention-days: 30
+          
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs-${{ github.sha }}
+          path: |
+            .buildozer/android/platform/build-*/logs/
+            .buildozer/android/platform/python-for-android/
+          retention-days: 7
