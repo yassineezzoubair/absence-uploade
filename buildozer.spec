@@ -31,12 +31,12 @@ android.add_src = service_account.json
 # Alternative if the above doesn't work:
 # android.add_asset = service_account.json
 
-# Android API configuration - updated for better compatibility
-android.api = 33
+# Android API configuration - compatible with GitHub Actions
+android.api = 31
 android.minapi = 21
-android.ndk = 25b
+android.ndk = 23b
 android.arch = armeabi-v7a,arm64-v8a
-android.sdk = 33
+android.sdk = 30
 android.ndk_path = 
 android.sdk_path = 
 
