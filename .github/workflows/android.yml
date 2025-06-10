@@ -45,6 +45,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip wheel setuptools
+          pip install Cython==0.29.36 buildozer==1.5.0
+          pip install -r requirements.txt # Add this line
           
       - name: Install system dependencies
         run: |
