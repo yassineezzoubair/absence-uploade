@@ -24,35 +24,47 @@ class PhotoUploaderApp(App):
         self.load_service_account()
 
     def load_service_account(self):
-        """Load service account from file or environment variable"""
+        """Load service account from file or environment variable (Android resource)"""
         try:
-            # Try to load from file first (for development)
+            # Option 1: Try to load from file first (for development or if buildozer copies it)
             if os.path.exists('service_account.json'):
                 with open('service_account.json', 'r') as f:
                     self.service_account_info = json.load(f)
+                print("Service account loaded from file.")
                 return
             
-            # Try to load from environment variable (for Android/build)
-            import android  # Only available on Android
-            from jnius import autoclass  # For accessing Java environment
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            current_activity = PythonActivity.mActivity
-            env = current_activity.getApplicationContext().getResources()
-            
-            # Get service account from build config
-            service_account_json = env.getString(
-                current_activity.getResources().getIdentifier(
-                    'service_account_json', 
-                    'string', 
-                    current_activity.getPackageName()
-                )
-            )
-            
-            if service_account_json:
-                self.service_account_info = json.loads(service_account_json)
-                
+            # Option 2: Try to load from Android string resource (for CI/CD injection)
+            if platform == 'android':
+                try:
+                    from jnius import autoclass
+                    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                    current_activity = PythonActivity.mActivity
+                    
+                    # Ensure the resource name 'service_account_json' exists in your Android build
+                    # This requires custom buildozer logic to inject it from GitHub Secrets
+                    resource_id = current_activity.getResources().getIdentifier(
+                        'service_account_json',
+                        'string',
+                        current_activity.getPackageName()
+                    )
+                    
+                    if resource_id != 0: # Check if resource was found
+                        service_account_json = current_activity.getResources().getString(resource_id)
+                        if service_account_json:
+                            self.service_account_info = json.loads(service_account_json)
+                            print("Service account loaded from Android resource.")
+                            return
+                        else:
+                            print("Android resource 'service_account_json' found but is empty.")
+                    else:
+                        print("Android resource 'service_account_json' not found.")
+                except Exception as android_e:
+                    print(f"Error loading service account from Android resource: {android_e}")
+                    # This can happen if jnius is not available or resource not found
+                    pass # Continue to check other methods or fall through
+
         except Exception as e:
-            print(f"Error loading service account: {e}")
+            print(f"General error loading service account: {e}")
 
     def build(self):
         self.title = "Photo Uploader"
@@ -64,8 +76,9 @@ class PhotoUploaderApp(App):
         self.status_label = Label(
             text='Ready to take photos!' if self.service_account_info else '⚠️ Service account not configured!',
             size_hint_y=0.3,
-            text_size=(None, None),
+            text_size=(self.width - 40, None), # Adjust text_size for wrapping
             halign='center',
+            valign='middle', # Center vertically
             color=(1, 1, 1, 1) if self.service_account_info else (1, 0.5, 0.5, 1)
         )
         
@@ -83,7 +96,11 @@ class PhotoUploaderApp(App):
             text='Photos will be uploaded to Google Drive' if self.service_account_info else 'Configure service account to enable uploads',
             size_hint_y=0.3,
             font_size='14sp',
-            color=(0.7, 0.7, 0.7, 1)
+            color=(0.7, 0.7, 0.7, 1),
+            text_size=(self.width - 40, None), # Adjust text_size for wrapping
+            halign='center',
+            valign='middle' # Center vertically
+        )
         
         layout.add_widget(self.status_label)
         layout.add_widget(self.capture_btn)
@@ -94,7 +111,7 @@ class PhotoUploaderApp(App):
     def show_popup(self, title, message):
         """Show a popup with the given title and message"""
         popup_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        popup_label = Label(text=message, text_size=(280, None), halign='center')
+        popup_label = Label(text=message, text_size=(280, None), halign='center', valign='middle') # Center vertically
         popup_button = Button(text='OK', size_hint_y=0.3)
         
         popup_layout.add_widget(popup_label)
@@ -126,28 +143,19 @@ class PhotoUploaderApp(App):
     def get_photo_path(self):
         """Get appropriate path for saving photos based on platform"""
         try:
-            if platform == 'android':
-                # Use Android-specific storage locations
-                from android.permissions import request_permissions, Permission
-                request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
-                
-                # Try to get DCIM directory first
-                dcim_path = os.path.join(storagepath.get_external_storage_dir(), 'DCIM')
-                if os.path.exists(dcim_path):
-                    photos_dir = os.path.join(dcim_path, 'PhotoUploader')
-                    os.makedirs(photos_dir, exist_ok=True)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    return os.path.join(photos_dir, f"photo_{timestamp}.jpg")
+            # Use appropriate base directory for pictures
+            base_dir = storagepath.get_pictures_dir()
             
-            # Fallback for all platforms
-            photos_dir = os.path.join(storagepath.get_pictures_dir(), 'PhotoUploader')
+            # Create a subdirectory for your app
+            photos_dir = os.path.join(base_dir, 'PhotoUploader')
             os.makedirs(photos_dir, exist_ok=True)
+            
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             return os.path.join(photos_dir, f"photo_{timestamp}.jpg")
-            
+                
         except Exception as e:
             print(f"Storage path error: {e}")
-            # Last resort fallback
+            # Last resort fallback if storagepath fails
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             return f"photo_{timestamp}.jpg"
     
@@ -164,9 +172,10 @@ class PhotoUploaderApp(App):
             self.filepath = self.get_photo_path()
             print(f"Photo will be saved to: {self.filepath}")
             
-            # Handle Android-specific camera requirements
+            # Request CAMERA permission if on Android
             if platform == 'android':
                 from android.permissions import request_permissions, Permission
+                # Only request CAMERA, as storage permissions are handled differently now
                 request_permissions([Permission.CAMERA])
             
             camera.take_picture(
