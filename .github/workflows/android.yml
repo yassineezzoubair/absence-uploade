@@ -1,80 +1,270 @@
-[app]
-# Basic app info
-title = PhotoUploader
-package.name = photouploader
-package.domain = org.example
-source.dir = .
-source.include_exts = py,png,jpg,jpeg,kv,atlas,json,txt
-version = 1.0
+name: Build Kivy APK
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'docs/**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+      upload_to_release:
+        description: 'Upload to GitHub Release (release builds only)'
+        type: boolean
+        default: false
 
-# Python requirements - updated versions and organization
-requirements = 
-    python3,
-    kivy==2.3.0,  # Updated to latest stable
-    plyer==2.1.0,
-    google-api-python-client==2.117.0,
-    google-auth==2.27.0,
-    google-auth-oauthlib==1.2.0,
-    google-auth-httplib2==0.1.1,
-    certifi,
-    pillow==10.2.0,
-    requests==2.31.0
+env:
+  ANDROID_API_LEVEL: 34
+  ANDROID_BUILD_TOOLS: 34.0.0
+  ANDROID_NDK_VERSION: 25.2.9519653
+  PYTHON_VERSION: '3.11'
 
-# App configuration
-orientation = portrait
-
-# Permissions - updated for Android 12+ compatibility
-android.permissions = 
-    CAMERA,
-    INTERNET,
-    ACCESS_NETWORK_STATE,
-    ACCESS_WIFI_STATE,
-    WAKE_LOCK,
-    VIBRATE
-
-# Add service account credentials - use secrets instead
-# android.add_src = service_account.json  # REMOVED - use GitHub Secrets
-
-# Android API configuration - match GitHub Actions
-android.api = 34
-android.minapi = 21
-android.ndk = 25.2.9519653  # Match workflow version
-android.arch = arm64-v8a  # Focus on 64-bit for better performance
-android.sdk = 34
-
-# Modern Android support
-android.useandroidx = True
-android.enable_androidx_workaround = True
-
-# Gradle dependencies - updated versions
-android.gradle_dependencies = 
-    com.google.android.gms:play-services-auth:21.0.0,
-    androidx.core:core-ktx:1.12.0,
-    androidx.appcompat:appcompat:1.6.1
-
-# Additional Android configuration
-android.allow_backup = True
-android.logcat_filters = *:S python:D
-
-# Build optimization - changed to apk for GitHub Actions
-android.release_artifact = apk
-android.debug.sign = 1
-
-# Application metadata
-android.meta_data = 
-    com.google.android.gms.version=@integer/google_play_services_version
-
-# Build optimization
-android.gradle.option = 
-    android.useAndroidX=true,
-    android.enableJetifier=true
-
-# New security config for Android 12+
-android.application_args = --use-sdk-versions 34
-android.manifest_application_arguments = android:appComponentFactory
-
-[buildozer]
-log_level = 2
-warn_on_root = 1
-build_dir = ./.buildozer
-bin_dir = ./bin
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # For proper version tagging
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            zip unzip openjdk-17-jdk \
+            python3-pip git pkg-config \
+            libgl1-mesa-dev libgles2-mesa-dev \
+            libffi-dev libssl-dev \
+            build-essential libltdl-dev \
+            autoconf automake libtool \
+            zlib1g-dev libncurses5-dev \
+            libncursesw5-dev libtinfo5 \
+            ccache
+            
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip wheel setuptools
+          pip install Cython==0.29.36 buildozer==1.5.0
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: ${{ env.ANDROID_BUILD_TOOLS }}
+          ndk: ${{ env.ANDROID_NDK_VERSION }}
+          
+      - name: Cache Buildozer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+            ~/.gradle/caches
+            ~/.android/build-cache
+          key: buildozer-${{ runner.os }}-${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_NDK_VERSION }}-${{ hashFiles('buildozer.spec', 'requirements.txt') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_NDK_VERSION }}-
+            buildozer-${{ runner.os }}-${{ env.ANDROID_API_LEVEL }}-
+            buildozer-${{ runner.os }}-
+            
+      - name: Setup ccache
+        run: |
+          ccache --set-config=cache_dir=$HOME/.ccache
+          ccache --set-config=max_size=2G
+          ccache --zero-stats
+          
+      - name: Validate buildozer.spec
+        run: |
+          if [ ! -f buildozer.spec ]; then
+            echo "Error: buildozer.spec not found!"
+            exit 1
+          fi
+          
+          # Check for common issues
+          if ! grep -q "requirements" buildozer.spec; then
+            echo "Warning: No requirements found in buildozer.spec"
+          fi
+          
+          # Validate Android API level matches
+          if grep -q "android.api" buildozer.spec; then
+            SPEC_API=$(grep "android.api" buildozer.spec | cut -d'=' -f2 | tr -d ' ')
+            if [ "$SPEC_API" != "${{ env.ANDROID_API_LEVEL }}" ]; then
+              echo "Warning: API level mismatch - spec: $SPEC_API, workflow: ${{ env.ANDROID_API_LEVEL }}"
+            fi
+          fi
+          
+      - name: Set build version
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          
+          if [ "$BUILD_TYPE" = "release" ]; then
+            BUILD_VERSION="${BUILD_NUMBER}"
+          else
+            BUILD_VERSION="${BUILD_NUMBER}-${SHORT_SHA}"
+          fi
+          
+          echo "BUILD_TYPE=$BUILD_TYPE" >> $GITHUB_ENV
+          echo "BUILD_VERSION=$BUILD_VERSION" >> $GITHUB_ENV
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          
+          echo "Building $BUILD_TYPE version $BUILD_VERSION"
+          
+      - name: Build APK
+        run: |
+          echo "Building $BUILD_TYPE APK version $BUILD_VERSION..."
+          
+          # Set buildozer verbose mode for debugging
+          export BUILDOZER_LOG_LEVEL=2
+          
+          if [ "$BUILD_TYPE" = "release" ]; then
+            buildozer android release
+          else
+            buildozer android debug
+          fi
+          
+      - name: Sign release APK
+        if: env.BUILD_TYPE == 'release' && env.KEYSTORE_FILE != ''
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_FILE" | base64 -d > keystore.jks
+          
+          # Find the unsigned APK
+          UNSIGNED_APK=$(find bin -name "*-release-unsigned.apk" | head -1)
+          SIGNED_APK=$(echo "$UNSIGNED_APK" | sed 's/-unsigned//')
+          
+          # Sign the APK
+          $ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS }}/apksigner sign \
+            --ks keystore.jks \
+            --ks-pass pass:$KEYSTORE_PASSWORD \
+            --key-pass pass:$KEY_PASSWORD \
+            --ks-key-alias $KEY_ALIAS \
+            --out "$SIGNED_APK" \
+            "$UNSIGNED_APK"
+            
+          # Verify signature
+          $ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS }}/apksigner verify "$SIGNED_APK"
+          
+          # Clean up
+          rm keystore.jks
+          rm "$UNSIGNED_APK"
+          
+      - name: Verify APK creation
+        run: |
+          if [ ! -d "bin" ] || [ -z "$(ls -A bin/*.apk 2>/dev/null)" ]; then
+            echo "Error: No APK files found in bin/ directory"
+            exit 1
+          fi
+          
+          echo "APK files created:"
+          ls -la bin/*.apk
+          
+      - name: Get APK info
+        run: |
+          for apk in bin/*.apk; do
+            echo "=== APK: $(basename "$apk") ==="
+            echo "Size: $(du -h "$apk" | cut -f1)"
+            echo "SHA256: $(sha256sum "$apk" | cut -d' ' -f1)"
+            
+            # Get APK info using aapt if available
+            if command -v aapt >/dev/null 2>&1; then
+              echo "Package info:"
+              aapt dump badging "$apk" | grep -E "(package|version|sdk)"
+            fi
+            echo "---"
+          done
+          
+      - name: ccache statistics
+        run: ccache --show-stats
+          
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kivy-apk-${{ env.BUILD_TYPE }}-v${{ env.BUILD_VERSION }}
+          path: bin/*.apk
+          retention-days: 30
+          
+      - name: Create Release
+        if: env.BUILD_TYPE == 'release' && github.event.inputs.upload_to_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.BUILD_VERSION }}
+          name: Release v${{ env.BUILD_VERSION }}
+          draft: false
+          prerelease: false
+          files: bin/*.apk
+          body: |
+            ## Kivy Android APK - Release v${{ env.BUILD_VERSION }}
+            
+            Built from commit: ${{ github.sha }}
+            Build type: Release
+            Android API Level: ${{ env.ANDROID_API_LEVEL }}
+            NDK Version: ${{ env.ANDROID_NDK_VERSION }}
+            
+            ### Installation
+            Download the APK file and install on your Android device.
+            
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs-${{ env.SHORT_SHA }}
+          path: |
+            .buildozer/android/platform/build-*/logs/
+            .buildozer/android/platform/python-for-android/
+            .buildozer/android/logcat.txt
+          retention-days: 7
+          
+  test-apk:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: kivy-apk-${{ needs.build.outputs.BUILD_TYPE || 'debug' }}-v${{ needs.build.outputs.BUILD_VERSION }}
+          
+      - name: Basic APK validation
+        run: |
+          # Check APK exists and is not empty
+          if [ ! -f *.apk ]; then
+            echo "Error: No APK file found"
+            exit 1
+          fi
+          
+          APK_SIZE=$(stat -c%s *.apk)
+          if [ $APK_SIZE -lt 1000000 ]; then
+            echo "Warning: APK size is suspiciously small ($APK_SIZE bytes)"
+          fi
+          
+          echo "APK validation passed"
+          echo "Size: $(du -h *.apk | cut -f1)"
