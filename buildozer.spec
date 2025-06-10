@@ -18,13 +18,8 @@ orientation = portrait
 # icon.adaptive_foreground.filename = %(source.dir)s/data/icon_fg.png
 # icon.adaptive_background.filename = %(source.dir)s/data/icon_bg.png
 
-# Permissions - organized by category
-# Camera and storage
-android.permissions = CAMERA,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
-# Network
-android.permissions += ,INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE
-# Additional useful permissions
-android.permissions += ,WAKE_LOCK,VIBRATE
+# Permissions - all in one line to avoid duplicates
+android.permissions = CAMERA,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,WAKE_LOCK,VIBRATE
 
 # Add service account credentials
 android.add_src = service_account.json
