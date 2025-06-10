@@ -21,6 +21,7 @@ on:
 env:
   ANDROID_API_LEVEL: 31
   ANDROID_BUILD_TOOLS: 30.0.3
+  ANDROID_NDK_VERSION: 23.1.7779620
 
 jobs:
   build:
@@ -55,14 +56,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3.2.1
         with:
-          cmdline-tools-version: 11076708
+          cmdline-tools-version: 8512546
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true
           packages: |
             platform-tools
-            platforms;android-${{ env.ANDROID_API_LEVEL }}
-            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
-            ndk;25.1.8937393
+            platforms;android-31
+            build-tools;30.0.3
+            ndk;23.1.7779620
             
       - name: Cache Buildozer dependencies
         uses: actions/cache@v3
